@@ -18,47 +18,84 @@ option go_package = "writev2";
 
 import "gogoproto/gogo.proto";
 
-
+// WriteRequest represents a Remote Write 2.0 request to write given time series
+// to remote destination. Note that Remote Write 2.0 requires a content
+// negotiation for version, certain features and compressions, explained in
+// https://docs.google.com/document/d/1jx1fqpRnM0pAndeo3AgY7g6BLxN3Ah8R0Mm8RvNsHoU/edit
+// TODO(bwplotka): Change URL to Prometheus docs once ready.
 message WriteRequest {
+  // symbols contains de-duplicated array of string elements used for various
+  // items in WriteRequest like labels and some metadata items. To decode
+  // each of those items, referenced, by "ref(s)" suffix, you need to lookup the
+  // actual string by index from symbols array. The order of strings is up to
+  // the client, server should not assume any particular encoding.
   repeated string symbols = 1;
+  // timeseries represents multiple series, potentially from multiple targets.
   repeated TimeSeries timeseries = 2 [(gogoproto.nullable) = false];
 }
 
+// TimeSeries represents multiple series.
 message TimeSeries {
-  // Sorted list of label name-value pair references,
-  // encoded as indices to the strings array.
-  // This list's len is always multiple of 2.
-  repeated uint32 labels_refs = 1 ;
-
+  // labels_refs is a sorted list of label name-value pair references, encoded
+  // as indices to the WriteRequest.symbols array. This list's len is always
+  // a multiple of 2.
+  //
+  // Note that there might be multiple TimeSeries objects in the same
+  // WriteRequests with the same labels e.g. for different exemplars, metadata
+  // or created timestamp.
+  repeated uint32 labels_refs = 1;
+  // samples contain zero or more samples for a given timeseries. For a typical
+  // clients, in healthy cases, there will be only one sample, for ~real
+  // time metric streaming.
+  //
+  // Samples are sorted by time (older first).
+  // TODO(bwplotka): Can/should samples and histograms be in enum? Do we allow mix of those in one TimeSeries?
   repeated Sample samples = 2 [(gogoproto.nullable) = false];
+  // exemplars represents optional set of exemplars attached to this series' samples.
   repeated Exemplar exemplars = 3 [(gogoproto.nullable) = false];
-  // Same as current version
+  // histograms represents zero or more histogram samples for a this series.
+  // TODO(bwplotka): ditto
+  // Histogram samples are sorted by time (older first).
   repeated Histogram histograms = 4 [(gogoproto.nullable) = false];
-
+  // metadata represents the metadata associated with the given series' samples.
   Metadata metadata = 5 [(gogoproto.nullable) = false];
-
-  // Optional created timestamp for the metric in ms format,
-  // if the first sample in samples does not contain 0 value.
-  // See model/timestamp/timestamp.go for conversion from time.Time
-  // to Prometheus timestamp.
+  // created_timestamp represents an optional created timestamp associated with
+  // this series' samples in ms format, typically for counter or histogram type
+  // metrics. NOTE: Servers might negotiate "required-created-timestamp" feature
+  // that requires this field to be set for counters and histograms.
+  // For Go, see github.com/prometheus/prometheus/model/timestamp/timestamp.go
+  // for conversion from/to time.Time to Prometheus timestamp.
   int64 created_timestamp = 6;
 }
 
+// Exemplar is an additional information attached to some series' samples.
+// It is typically used to attach an example trace or request ID associated with
+// the metric changes.
 message Exemplar {
-  // TODO: same as TimeSeries.labels_refs
+  // labels_refs is a sorted list of label name-value pair references, encoded
+  // as indices to the WriteRequest.symbols array. This list's len is always
+  // a multiple of 2.
   repeated uint32 labels_refs = 1;
+  // value represents an exact example value. This can be useful when the exemplar
+  // is attached to a histogram, which only gives an estimated value through buckets.
   double value = 2;
-  // timestamp is in ms.
+  // timestamp represents an optional timestamp of the example in ms.
+  // For Go, see github.com/prometheus/prometheus/model/timestamp/timestamp.go
+  // for conversion from/to time.Time to Prometheus timestamp.
   int64 timestamp = 3;
 }
 
+// Sample represents series sample.
 message Sample {
+  // value of the sample.
   double value = 1;
-  // timestamp is in ms format, see model/timestamp/timestamp.go for
-  // conversion from time.Time to Prometheus timestamp.
+  // timestamp represents timestamp of the sample in ms.
+  // For Go, see github.com/prometheus/prometheus/model/timestamp/timestamp.go
+  // for conversion from/to time.Time to Prometheus timestamp.
   int64 timestamp = 2;
 }
 
+// Metadata represents the metadata associated with the given series' samples.
 message Metadata {
   enum MetricType {
     METRIC_TYPE_UNSPECIFIED        = 0;
@@ -71,7 +108,11 @@ message Metadata {
     METRIC_TYPE_STATESET       = 7;
   }
   MetricType type = 1;
+  // help_ref is a reference to the WriteRequest.symbols array representing help
+  // text for the metric.
   uint32 help_ref = 3;
+  // unit_ref is a reference to the WriteRequest.symbols array representing unit
+  // for the metric.
   uint32 unit_ref = 4;
 }
 
