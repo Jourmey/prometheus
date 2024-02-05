@@ -25,6 +25,8 @@ import (
 	// Register consul plugin.
 	_ "github.com/prometheus/prometheus/discovery/consul"
 
+	_ "github.com/prometheus/prometheus/discovery/etcd"
+
 	// Register digitalocean plugin.
 	_ "github.com/prometheus/prometheus/discovery/digitalocean"
 

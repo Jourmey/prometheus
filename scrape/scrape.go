@@ -548,7 +548,18 @@ func (sp *scrapePool) sync(targets []*Target) {
 			if sp.enableProtobufNegotiation {
 				acceptHeader = scrapeAcceptHeaderWithProtobuf
 			}
-			s := &targetScraper{Target: t, client: sp.client, timeout: timeout, bodySizeLimit: bodySizeLimit, acceptHeader: acceptHeader}
+
+			var (
+				s scraper
+			)
+			scheme := t.labels.Get(model.SchemeLabel)
+
+			if scheme == "pomelo" { // pomelo 协议定制刮片
+				s = &pomeloTargetScraper{Target: t, client: sp.client, timeout: timeout, bodySizeLimit: bodySizeLimit, acceptHeader: acceptHeader}
+			} else {
+				s = &targetScraper{Target: t, client: sp.client, timeout: timeout, bodySizeLimit: bodySizeLimit, acceptHeader: acceptHeader}
+			}
+
 			l := sp.newLoop(scrapeLoopOptions{
 				target:          t,
 				scraper:         s,

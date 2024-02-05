@@ -21,6 +21,7 @@ import (
 	_ "github.com/prometheus/prometheus/discovery/consul"       // register consul
 	_ "github.com/prometheus/prometheus/discovery/digitalocean" // register digitalocean
 	_ "github.com/prometheus/prometheus/discovery/dns"          // register dns
+	_ "github.com/prometheus/prometheus/discovery/etcd"         // register zookeeper
 	_ "github.com/prometheus/prometheus/discovery/eureka"       // register eureka
 	_ "github.com/prometheus/prometheus/discovery/file"         // register file
 	_ "github.com/prometheus/prometheus/discovery/gce"          // register gce
