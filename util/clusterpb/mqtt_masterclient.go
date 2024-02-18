@@ -79,6 +79,9 @@ func (m *MqttMasterClient) Subscribe(ctx context.Context, in *proto.SubscribeReq
 	}
 
 	response, err := m.request(proto.MASTER_WATCHER, request)
+	if err != nil {
+		return nil, err
+	}
 
 	res := proto.SubscribeResponse{}
 

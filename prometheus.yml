@@ -53,10 +53,11 @@ scrape_configs:
 
     pomelo_sd_configs:
       # 服务名称
-      - serverId: "cluster-server-record-996"
+      - serverId: "cluster-server-monitor-001"
         servers:
-          - "xxx"
+          - "chat"
+          - "connector"
         # node服务对应的master地址
-        advertiseAddr: "10.108.228.154:3005"
+        advertiseAddr: "10.108.233.8:3005"
         # 与master通信token
         token: "agarxhqb98rpajloaxn34ga8xrunpagkjwlaw3ruxnpaagl29w4rxn"

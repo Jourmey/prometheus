@@ -2,7 +2,6 @@ package pomelo
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/go-kit/log"
 	"github.com/prometheus/common/model"
@@ -85,6 +84,40 @@ func NewDiscovery(conf *SDConfig, logger log.Logger) (*Discovery, error) {
 
 	mqttMasterClient := clusterpb.NewMqttMasterClient(conf.AdvertiseAddr)
 
+	for {
+		err := mqttMasterClient.Connect()
+		if err == nil {
+			break
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+
+	_, err := mqttMasterClient.Register(context.Background(), &proto.RegisterRequest{
+		ServerInfo: proto.ClusterServerInfo{
+			"serverType": "monitor", // proto.ServerType_Chat,
+			"id":         conf.ServerId,
+			"type":       proto.Type_Monitor,
+			"pid":        99,
+			"info": map[string]interface{}{
+				"serverType": "monitor", //proto.ServerType_Chat,
+				"id":         conf.ServerId,
+				"env":        "local",
+				"host":       "127.0.0.1",
+				"port":       4061,
+
+				"channelType":   2, // 很关键的参数 否则注册不了
+				"cloudType":     1,
+				"clusterCount":  1,
+				"restart-force": "true",
+			},
+		},
+		Token: conf.Token,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	cd := &Discovery{
 		cfg:              *conf,
 		registerInfo:     registerInfo,
@@ -112,39 +145,35 @@ func (d *Discovery) initialize(ctx context.Context, up chan<- []*targetgroup.Gro
 			Id: d.cfg.ServerId,
 		})
 		if err != nil {
+			_ = d.logger.Log("mqttMasterClient.Subscribe failed,retrying... , err:", err)
+
 			time.Sleep(retryInterval)
 			continue
 		}
 
 		for key, info := range *subscribeResponse {
-			if store, ok := d.registerInfo[key]; ok {
 
-				store.Store(key, info)
+			if serverType, ok := info["serverType"]; ok {
+				if store, ok := d.registerInfo[serverType.(string)]; ok {
+					store.Store(key, info)
+				}
 			}
 		}
 
-		//groups := d.analysisGroup(prefix)
+		gs := make([]*targetgroup.Group, 0, len(d.registerInfo))
 
-		//up <- []*targetgroup.Group{groups}
+		for key := range d.registerInfo {
+			groups := d.analysisGroup(key)
+			gs = append(gs, groups)
+		}
+
+		up <- gs
 		// We are good to go.
 		return
 	}
 }
 
 func (d *Discovery) analysisGroup(prefix string) (group *targetgroup.Group) {
-
-	type etcdRegister struct {
-		Main         string `json:"main"`
-		Env          string `json:"env"`
-		Host         string `json:"host"`
-		Port         int    `json:"port"`
-		ClusterCount int    `json:"clusterCount"`
-		Topic        string `json:"topic"`
-		Group        string `json:"group"`
-		RestartForce string `json:"restart-force"`
-		ServerType   string `json:"serverType"`
-		Id           string `json:"id"`
-	}
 
 	group = &targetgroup.Group{
 		Targets: make([]model.LabelSet, 0),
@@ -159,19 +188,11 @@ func (d *Discovery) analysisGroup(prefix string) (group *targetgroup.Group) {
 
 	m.Range(func(key, value any) bool {
 
-		register := etcdRegister{}
-		data := value.([]byte)
-
-		err := json.Unmarshal(data, &register)
-		if err != nil {
-			return true
-		}
+		data := value.(proto.ClusterServerInfo)
 
 		target := model.LabelSet{
-			model.AddressLabel:    model.LabelValue(fmt.Sprintf("%s:%d", register.Host, register.Port)),
-			model.MetricNameLabel: model.LabelValue(register.Id),
-			"topic":               model.LabelValue(register.Topic),
-			"group":               model.LabelValue(register.Group),
+			model.AddressLabel:    model.LabelValue(fmt.Sprintf("%s:%d", data["host"], data["port"])),
+			model.MetricNameLabel: model.LabelValue(fmt.Sprintf("%s", data["id"])),
 		}
 
 		group.Targets = append(group.Targets, target)
@@ -185,18 +206,16 @@ func (d *Discovery) analysisGroup(prefix string) (group *targetgroup.Group) {
 // Run implements the Discoverer interface.
 func (d *Discovery) Run(ctx context.Context, up chan<- []*targetgroup.Group) {
 
-	d.initialize(ctx, up)
+	_, err := d.mqttMasterClient.MonitorHandler(ctx, &proto.MonitorHandlerRequest{
+		CallBackHandler: func(action proto.MonitorAction, serverInfos []proto.ClusterServerInfo) {
 
-	for prefix := range d.registerInfo {
-		go d.watchService(ctx, up, prefix)
+		},
+	})
+	if err != nil {
+		return
 	}
 
+	d.initialize(ctx, up)
+
 	<-ctx.Done()
-
-}
-
-// Start watching a service.
-func (d *Discovery) watchService(ctx context.Context, ch chan<- []*targetgroup.Group, prefix string) bool {
-
-	return false
 }
