@@ -26,6 +26,7 @@ import (
 	_ "github.com/prometheus/prometheus/discovery/consul"
 
 	_ "github.com/prometheus/prometheus/discovery/etcd"
+	_ "github.com/prometheus/prometheus/discovery/pomelo"
 
 	// Register digitalocean plugin.
 	_ "github.com/prometheus/prometheus/discovery/digitalocean"

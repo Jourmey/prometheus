@@ -2,7 +2,7 @@ package clusterpb
 
 import (
 	"context"
-	"github.com/prometheus/prometheus/scrape/proto"
+	"github.com/prometheus/prometheus/util/proto"
 	"log"
 	"testing"
 	"time"

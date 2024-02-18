@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/prometheus/prometheus/scrape/proto"
+	"github.com/prometheus/prometheus/util/proto"
 	"sync"
 	"time"
 

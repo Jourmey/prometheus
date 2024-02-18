@@ -37,16 +37,26 @@ scrape_configs:
 
     scheme: "pomelo"
     metrics_path: "/user/connector/connectorRemote/Test"
+    #
+    #    #    static_configs:
+    #    #      - targets: [ "10.108.224.237:4051" ]
+    #
+    #    etcd_sd_configs:
+    #      - endpoints:
+    #          - "10.108.114.8:2379"
+    #        prefixs:
+    #          - "production-cluster-server-consumer"
+    #          - "production-cluster-server-connector"
+    #        certFile: "/Users/zhengjm/Desktop/工作日志/etcdConfig/certChain"
+    #        certKeyFile: "/Users/zhengjm/Desktop/工作日志/etcdConfig/privateKey"
+    #        caFile: "/Users/zhengjm/Desktop/工作日志/etcdConfig/rootCertificate"
 
-    #    static_configs:
-    #      - targets: [ "10.108.224.237:4051" ]
-
-    etcd_sd_configs:
-      - endpoints:
-          - "10.108.114.8:2379"
-        prefixs:
-          - "production-cluster-server-consumer"
-          - "production-cluster-server-connector"
-        certFile: "/Users/zhengjm/Desktop/工作日志/etcdConfig/certChain"
-        certKeyFile: "/Users/zhengjm/Desktop/工作日志/etcdConfig/privateKey"
-        caFile: "/Users/zhengjm/Desktop/工作日志/etcdConfig/rootCertificate"
+    pomelo_sd_configs:
+      # 服务名称
+      - serverId: "cluster-server-record-996"
+        servers:
+          - "xxx"
+        # node服务对应的master地址
+        advertiseAddr: "10.108.228.154:3005"
+        # 与master通信token
+        token: "agarxhqb98rpajloaxn34ga8xrunpagkjwlaw3ruxnpaagl29w4rxn"

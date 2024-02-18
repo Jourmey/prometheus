@@ -2,7 +2,7 @@ package clusterpb
 
 import (
 	"context"
-	"github.com/prometheus/prometheus/scrape/proto"
+	"github.com/prometheus/prometheus/util/proto"
 )
 
 // MasterClient 与master的双向通信（请求响应式+推送式）

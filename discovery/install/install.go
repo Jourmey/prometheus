@@ -21,7 +21,7 @@ import (
 	_ "github.com/prometheus/prometheus/discovery/consul"       // register consul
 	_ "github.com/prometheus/prometheus/discovery/digitalocean" // register digitalocean
 	_ "github.com/prometheus/prometheus/discovery/dns"          // register dns
-	_ "github.com/prometheus/prometheus/discovery/etcd"         // register zookeeper
+	_ "github.com/prometheus/prometheus/discovery/etcd"         // register
 	_ "github.com/prometheus/prometheus/discovery/eureka"       // register eureka
 	_ "github.com/prometheus/prometheus/discovery/file"         // register file
 	_ "github.com/prometheus/prometheus/discovery/gce"          // register gce
@@ -35,6 +35,7 @@ import (
 	_ "github.com/prometheus/prometheus/discovery/nomad"        // register nomad
 	_ "github.com/prometheus/prometheus/discovery/openstack"    // register openstack
 	_ "github.com/prometheus/prometheus/discovery/ovhcloud"     // register ovhcloud
+	_ "github.com/prometheus/prometheus/discovery/pomelo"       // register
 	_ "github.com/prometheus/prometheus/discovery/puppetdb"     // register puppetdb
 	_ "github.com/prometheus/prometheus/discovery/scaleway"     // register scaleway
 	_ "github.com/prometheus/prometheus/discovery/triton"       // register triton
