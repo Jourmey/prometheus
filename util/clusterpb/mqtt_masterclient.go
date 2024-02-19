@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/prometheus/prometheus/util/proto"
+	"log"
 	"strconv"
 	"sync"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/prometheus/prometheus/util/proto"
 )
 
 const (
@@ -32,10 +33,12 @@ type MqttMasterClient struct {
 	pingTimeout    time.Duration // default 1s
 	requestTimeout time.Duration // default 10s
 
-	reqId          int
-	socket         mqtt.Client
-	monitorResp    sync.Map // monitor request 请求列表
-	monitorHandler func(action proto.MonitorAction, serverInfos []proto.ClusterServerInfo)
+	reqId       int
+	socket      mqtt.Client
+	monitorResp sync.Map // monitor request 请求列表
+
+	addServerCallBackHandler    func(serverInfos []proto.ClusterServerInfo) // 新增服务
+	removeServerCallBackHandler func(id string)                             // 删除服务
 
 	register  chan registerResponse
 	subscribe chan proto.ClusterServerInfo
@@ -107,7 +110,8 @@ func (m *MqttMasterClient) Record(ctx context.Context, in *proto.RecordRequest) 
 
 func (m *MqttMasterClient) MonitorHandler(ctx context.Context, in *proto.MonitorHandlerRequest) (*proto.MonitorHandlerResponse, error) {
 
-	m.monitorHandler = in.CallBackHandler
+	m.addServerCallBackHandler = in.AddServerCallBackHandler
+	m.removeServerCallBackHandler = in.RemoveServerCallBackHandler
 
 	return &proto.MonitorHandlerResponse{}, nil
 }
@@ -175,29 +179,66 @@ func (m *MqttMasterClient) publishHandler(client mqtt.Client, message mqtt.Messa
 
 		} else {
 
-			if m.monitorHandler != nil {
-
-				type monitorMessageOnChangeBody struct {
-					Action proto.MonitorAction       `json:"action"`
-					Server []proto.ClusterServerInfo `json:"server"`
-				}
-
-				body := monitorMessageOnChangeBody{}
-
-				err := json.Unmarshal(msg.Body, &body)
-				if err != nil {
-					return
-				}
-
-				m.monitorHandler(body.Action, body.Server)
+			type monitorMessageOnChangeBody struct {
+				Action proto.MonitorAction `json:"action"`
+				Server interface{}         `json:"server"` // 这里的server可能是数组 可能是对象 需要特殊处理
+				Id     string              `json:"id"`
 			}
 
+			body := monitorMessageOnChangeBody{}
+
+			log.Println("MqttMasterClient topic_Monitor change, msg body:", string(msg.Body))
+
+			err := json.Unmarshal(msg.Body, &body)
+			if err != nil {
+				log.Println("MqttMasterClient topic_Monitor json.Unmarshal failed,err:", err)
+				return
+			}
+
+			switch body.Action {
+			case proto.MonitorAction_addServer:
+
+				if m.addServerCallBackHandler != nil {
+					m.addServerCallBackHandler(analysisClusterServerInfo(body.Server))
+				}
+
+			case proto.MonitorAction_removeServer:
+
+				if m.removeServerCallBackHandler != nil {
+					m.removeServerCallBackHandler(body.Id)
+				}
+
+			case proto.MonitorAction_replaceServer:
+			case proto.MonitorAction_startOve:
+			}
 		}
 
 	default:
 
 	}
 
+}
+
+func analysisClusterServerInfo(in interface{}) (out []proto.ClusterServerInfo) {
+
+	switch server := in.(type) {
+
+	case map[string]interface{}:
+
+		out = append(out, server)
+
+	case []interface{}:
+
+		for _, s := range server {
+			switch one := s.(type) {
+
+			case map[string]interface{}:
+				out = append(out, one)
+			}
+		}
+	}
+
+	return out
 }
 
 func (m *MqttMasterClient) notify(moduleId string, body interface{}) error {

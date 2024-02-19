@@ -66,7 +66,7 @@ func (c *SDConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 type Discovery struct {
 	cfg SDConfig
 
-	registerInfo     map[string]*sync.Map        // key value etcd中的原始数据
+	registerInfo     sync.Map                    // key value etcd中的原始数据
 	mqttMasterClient clusterpb.MasterClientAgent // pomelo master agent
 	logger           log.Logger
 }
@@ -75,11 +75,6 @@ type Discovery struct {
 func NewDiscovery(conf *SDConfig, logger log.Logger) (*Discovery, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
-	}
-
-	registerInfo := make(map[string]*sync.Map, len(conf.Servers)) // key value etcd中的原始数据
-	for i := range conf.Servers {
-		registerInfo[conf.Servers[i]] = &sync.Map{}
 	}
 
 	mqttMasterClient := clusterpb.NewMqttMasterClient(conf.AdvertiseAddr)
@@ -120,7 +115,7 @@ func NewDiscovery(conf *SDConfig, logger log.Logger) (*Discovery, error) {
 
 	cd := &Discovery{
 		cfg:              *conf,
-		registerInfo:     registerInfo,
+		registerInfo:     sync.Map{},
 		mqttMasterClient: mqttMasterClient,
 		logger:           logger,
 	}
@@ -152,18 +147,14 @@ func (d *Discovery) initialize(ctx context.Context, up chan<- []*targetgroup.Gro
 		}
 
 		for key, info := range *subscribeResponse {
-
-			if serverType, ok := info["serverType"]; ok {
-				if store, ok := d.registerInfo[serverType.(string)]; ok {
-					store.Store(key, info)
-				}
-			}
+			d.registerInfo.Store(key, info)
 		}
 
-		gs := make([]*targetgroup.Group, 0, len(d.registerInfo))
+		gs := make([]*targetgroup.Group, 0)
 
-		for key := range d.registerInfo {
-			groups := d.analysisGroup(key)
+		for _, server := range d.cfg.Servers {
+
+			groups := d.analysisGroup(server)
 			gs = append(gs, groups)
 		}
 
@@ -173,29 +164,32 @@ func (d *Discovery) initialize(ctx context.Context, up chan<- []*targetgroup.Gro
 	}
 }
 
-func (d *Discovery) analysisGroup(prefix string) (group *targetgroup.Group) {
+func (d *Discovery) analysisGroup(server string) (group *targetgroup.Group) {
 
 	group = &targetgroup.Group{
 		Targets: make([]model.LabelSet, 0),
-		Labels:  model.LabelSet{},
-		Source:  prefix,
+		Labels: model.LabelSet{
+			"serverType": model.LabelValue(server),
+		},
+		Source: server,
 	}
 
-	m, ok := d.registerInfo[prefix]
-	if !ok {
-		return group
-	}
-
-	m.Range(func(key, value any) bool {
+	d.registerInfo.Range(func(key, value any) bool {
 
 		data := value.(proto.ClusterServerInfo)
 
-		target := model.LabelSet{
-			model.AddressLabel:    model.LabelValue(fmt.Sprintf("%s:%d", data["host"], data["port"])),
-			model.MetricNameLabel: model.LabelValue(fmt.Sprintf("%s", data["id"])),
-		}
+		serverType := data["serverType"].(string)
+		if serverType == server {
 
-		group.Targets = append(group.Targets, target)
+			port := data["port"].(float64)
+
+			target := model.LabelSet{
+				model.AddressLabel:    model.LabelValue(fmt.Sprintf("%s:%d", data["host"], int(port))),
+				model.MetricNameLabel: model.LabelValue(fmt.Sprintf("%s", data["id"])),
+			}
+
+			group.Targets = append(group.Targets, target)
+		}
 
 		return true
 	})
@@ -207,8 +201,43 @@ func (d *Discovery) analysisGroup(prefix string) (group *targetgroup.Group) {
 func (d *Discovery) Run(ctx context.Context, up chan<- []*targetgroup.Group) {
 
 	_, err := d.mqttMasterClient.MonitorHandler(ctx, &proto.MonitorHandlerRequest{
-		CallBackHandler: func(action proto.MonitorAction, serverInfos []proto.ClusterServerInfo) {
+		AddServerCallBackHandler: func(serverInfos []proto.ClusterServerInfo) { // 监听上线服务
 
+			serverTypes := map[string]struct{}{}
+
+			for _, info := range serverInfos {
+				id := info["id"].(string)
+				serverType := info["serverType"].(string)
+
+				find := false
+				for _, server := range d.cfg.Servers {
+					if server == serverType {
+						find = true
+					}
+				}
+				if find {
+					d.registerInfo.Store(id, info)
+					serverTypes[serverType] = struct{}{}
+				}
+			}
+
+			for s := range serverTypes {
+				group := d.analysisGroup(s)
+				up <- []*targetgroup.Group{group}
+			}
+
+		},
+
+		RemoveServerCallBackHandler: func(id string) { // 监听离线服务
+			value, loaded := d.registerInfo.LoadAndDelete(id)
+			if loaded {
+				data := value.(proto.ClusterServerInfo)
+
+				serverType := data["serverType"].(string)
+
+				group := d.analysisGroup(serverType)
+				up <- []*targetgroup.Group{group}
+			}
 		},
 	})
 	if err != nil {

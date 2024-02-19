@@ -67,7 +67,8 @@ type (
 // MonitorHandler 监听master中的集群变化
 type (
 	MonitorHandlerRequest struct {
-		CallBackHandler func(action MonitorAction, serverInfos []ClusterServerInfo)
+		AddServerCallBackHandler    func(serverInfos []ClusterServerInfo) // 新增服务
+		RemoveServerCallBackHandler func(id string)                       // 删除服务
 	}
 
 	MonitorHandlerResponse struct{}

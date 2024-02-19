@@ -1,0 +1,42 @@
+{
+  "action": "addServer",
+  "server": [
+    {
+      "channelType": 2,
+      "cloudType": 1,
+      "clusterCount": 1,
+      "env": "local",
+      "host": "127.0.0.1",
+      "id": "cluster-server-monitor-001",
+      "port": 4061,
+      "restart-force": "true",
+      "serverType": "monitor",
+      "pid": 99
+    }
+  ]
+}
+
+
+{
+  "action": "addServer",
+  "server": {
+    "main": "/app/app.js",
+    "env": "production",
+    "host": "10.108.231.103",
+    "port": 12000,
+    "channelType": 2,
+    "clusterCount": 1,
+    "restart-force": "false",
+    "recover": "true",
+    "delay-notify": "true",
+    "serverType": "chat",
+    "id": "cluster-server-chat-2-10.108.231.103-1708254932",
+    "pid": 16
+  }
+}
+
+{
+  "action": "removeServer",
+  "id": "cluster-server-chat-2-10.108.225.53-1708254932"
+}
+
